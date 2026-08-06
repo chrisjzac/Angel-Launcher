@@ -3,6 +3,7 @@ name: build
 on:
   push:
     branches: ["**"]
+  pull_request:
   workflow_dispatch:
 
 jobs:
@@ -18,9 +19,6 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
-
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
 
@@ -34,3 +32,6 @@ jobs:
           name: angel-launcher-debug-apk
           path: out/angel-launcher-debug.apk
           if-no-files-found: error
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
