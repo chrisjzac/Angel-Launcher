@@ -1,0 +1,11 @@
+# message	direction	amount	merchant	category
+HDFC Bank: Rs.450.00 debited from A/c XX1234 on 05-Aug-26 to VPA bluetokai@okhdfcbank. Ref 902133.	OUT	450	bluetokai@okhdfcbank	Food
+INR 1,249.00 spent on ICICI Bank Card XX9012 on 05-Aug-26 at SWIGGY. Avl Lmt: INR 48,751.00	OUT	1249	SWIGGY	Food
+Your A/c XX1234 is credited with Rs 1,85,000.00 on 01-Aug-26 by NEFT-SALARY. -HDFC Bank	IN	185000	NEFT-SALARY	Income
+Rs 649 debited via UPI to NETFLIX INDIA on 03-Aug-26. UPI Ref 445512. -SBI	OUT	649	NETFLIX INDIA	Subscriptions
+Rs.2,340.00 debited from A/c XX1234 on 04-Aug-26 to VPA indianoil@ybl. Ref 771902.	OUT	2340	indianoil@ybl	Fuel
+INR 12,400.00 paid towards HDFC Credit Card XX3344 on 02-Aug-26. Thank you.	OUT	12400	HDFC Credit Card XX3344	Card dues
+Rs 899.00 spent on ICICI Bank Card XX9012 on 04-Aug-26 at AMAZON PAY. Avl Lmt: INR 49,650.00	OUT	899	AMAZON PAY	Shopping
+Your A/c XX1234 is credited with Rs 3,200.00 on 03-Aug-26 by UPI from ZERODHA PAYOUT.	IN	3200	ZERODHA PAYOUT	Income
+Dear customer, your BESCOM bill of Rs 1,860.00 is due on 12-Aug-26. Pay to avoid disconnection.	SKIP	-	-	No debit or credit verb
+Get 40% off on your next 3 rides! Use code RIDE40. T&C apply.	SKIP	-	-	No amount found
