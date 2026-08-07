@@ -27,6 +27,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TrendingDown
 import androidx.compose.material.icons.outlined.TrendingUp
@@ -63,6 +64,8 @@ private val Small = RoundedCornerShape(14.dp)
 fun MoneyPane(
     model: MoneyViewModel,
     accent: Color,
+    locked: Boolean,
+    onUnlock: () -> Unit,
     onLeaveForResult: () -> Unit,
 ) {
     var tab by remember { mutableStateOf(0) }
@@ -74,10 +77,13 @@ fun MoneyPane(
             .padding(start = 22.dp, end = 22.dp, top = 34.dp, bottom = 24.dp),
     ) {
         Tabs(tab) { tab = it }
+
+        if (locked) UnlockBar(accent, onUnlock)
+
         if (tab == 0) {
-            Payments(model, accent, onLeaveForResult)
+            Payments(model, accent, locked, onLeaveForResult)
         } else {
-            Stocks(model, accent, onLeaveForResult)
+            Stocks(model, accent, locked, onLeaveForResult)
         }
     }
 }
@@ -113,7 +119,12 @@ private fun Tabs(selected: Int, onSelect: (Int) -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () -> Unit) {
+private fun Payments(
+    model: MoneyViewModel,
+    accent: Color,
+    locked: Boolean,
+    onLeaveForResult: () -> Unit,
+) {
     val context = LocalContext.current
     val ledger by model.ledger.collectAsState()
     val scanning by model.scanning.collectAsState()
@@ -140,17 +151,22 @@ private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () 
             .verticalScroll(rememberScrollState()),
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Figure("OUT", inr(ledger.out), Modifier.weight(1f))
-            Figure("IN", inr(ledger.inn), Modifier.weight(1f))
+            Figure("OUT", hide(locked, inr(ledger.out)), Modifier.weight(1f))
+            Figure("IN", hide(locked, inr(ledger.inn)), Modifier.weight(1f))
         }
 
         Row(
             modifier = Modifier.padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            Mini("NET", signed(ledger.net), if (ledger.net >= 0) Palette.Up else Palette.Down, Modifier.weight(1f))
-            Mini("ENTRIES", ledger.entries.toString(), Palette.Ink, Modifier.weight(1f))
-            Mini("LARGEST", inr(ledger.largest), Palette.Ink, Modifier.weight(1f))
+            Mini(
+                "NET",
+                hide(locked, signed(ledger.net)),
+                if (locked || ledger.net >= 0) Palette.Up else Palette.Down,
+                Modifier.weight(1f),
+            )
+            Mini("ENTRIES", hide(locked, ledger.entries.toString()), Palette.Ink, Modifier.weight(1f))
+            Mini("LARGEST", hide(locked, inr(ledger.largest)), Palette.Ink, Modifier.weight(1f))
         }
 
         // The skipped bucket is deliberately visible; so is a listener that is off.
@@ -235,7 +251,7 @@ private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () 
                         verticalAlignment = Alignment.Bottom,
                     ) {
                         Text(category.key, style = Type.body(12.5), color = Palette.Ink)
-                        Text(inr(category.total), style = Type.mono(10.0), color = Palette.Dim)
+                        Text(hide(locked, inr(category.total)), style = Type.mono(10.0), color = Palette.Dim)
                     }
                     Box(
                         modifier = Modifier
@@ -247,7 +263,7 @@ private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(
-                                    if (largest > 0) (category.total / largest).toFloat() else 0f,
+                                    if (locked || largest <= 0) 0f else (category.total / largest).toFloat(),
                                 )
                                 .height(3.dp)
                                 .background(Color(category.tint), RoundedCornerShape(2.dp)),
@@ -271,20 +287,31 @@ private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () 
                         .background(Color(txn.category.tint), RoundedCornerShape(2.dp)),
                 )
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(txn.merchant, style = Type.body(14.0), color = Palette.Ink, maxLines = 1)
                     Text(
-                        text = listOfNotNull(txn.date, txn.channel, txn.account?.let { "··$it" })
-                            .joinToString(" · ")
-                            .uppercase(Locale.getDefault()),
+                        text = hide(locked, txn.merchant),
+                        style = Type.body(14.0),
+                        color = Palette.Ink,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = hide(
+                            locked,
+                            listOfNotNull(txn.date, txn.channel, txn.account?.let { "··" + it })
+                                .joinToString(" · ")
+                                .uppercase(Locale.getDefault()),
+                        ),
                         style = Type.mono(8.5),
                         color = Palette.Dim,
                         modifier = Modifier.padding(top = 3.dp),
                     )
                 }
                 Text(
-                    text = (if (txn.direction == Direction.IN) "+" else "−") + inr(txn.amount),
+                    text = hide(
+                        locked,
+                        (if (txn.direction == Direction.IN) "+" else "−") + inr(txn.amount),
+                    ),
                     style = Type.mono(12.5),
-                    color = if (txn.direction == Direction.IN) Palette.Up else Palette.Ink,
+                    color = if (!locked && txn.direction == Direction.IN) Palette.Up else Palette.Ink,
                 )
             }
             Box(
@@ -322,7 +349,7 @@ private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () 
             if (showSkipped) {
                 ledger.skipped.forEach { skip ->
                     Column(modifier = Modifier.padding(vertical = 9.dp, horizontal = 2.dp)) {
-                        Text(skip.raw, style = Type.body(11.5), color = Palette.Dim)
+                        Text(hide(locked, skip.raw), style = Type.body(11.5), color = Palette.Dim)
                         Text(
                             text = skip.why.uppercase(Locale.getDefault()),
                             style = Type.mono(8.0),
@@ -339,7 +366,12 @@ private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () 
 }
 
 @Composable
-private fun Stocks(model: MoneyViewModel, accent: Color, onLeaveForResult: () -> Unit) {
+private fun Stocks(
+    model: MoneyViewModel,
+    accent: Color,
+    locked: Boolean,
+    onLeaveForResult: () -> Unit,
+) {
     val holdings by model.holdings.collectAsState()
     val spark by model.spark.collectAsState()
     val importResult by model.importResult.collectAsState()
@@ -375,7 +407,7 @@ private fun Stocks(model: MoneyViewModel, accent: Color, onLeaveForResult: () ->
         Column(modifier = Modifier.padding(bottom = 16.dp)) {
             Text("PORTFOLIO", style = Type.MicroSmall, color = Palette.Dim)
             Text(
-                text = inr(portfolio.value),
+                text = hide(locked, inr(portfolio.value)),
                 style = Type.figure(42),
                 color = Palette.Ink,
                 modifier = Modifier.padding(top = 7.dp),
@@ -396,13 +428,16 @@ private fun Stocks(model: MoneyViewModel, accent: Color, onLeaveForResult: () ->
                     modifier = Modifier.size(13.dp),
                 )
                 Text(
-                    text = signed(portfolio.profit) +
-                        String.format(Locale.US, "  (%.2f%%)", portfolio.profitPct),
+                    text = hide(
+                        locked,
+                        signed(portfolio.profit) +
+                            String.format(Locale.US, "  (%.2f%%)", portfolio.profitPct),
+                    ),
                     style = Type.mono(11.0),
-                    color = if (portfolio.profit >= 0) Palette.Up else Palette.Down,
+                    color = if (locked || portfolio.profit >= 0) Palette.Up else Palette.Down,
                 )
             }
-            if (spark.size > 2) Sparkline(spark, accent)
+            if (!locked && spark.size > 2) Sparkline(spark, accent)
         }
         Box(
             modifier = Modifier
@@ -415,14 +450,14 @@ private fun Stocks(model: MoneyViewModel, accent: Color, onLeaveForResult: () ->
             modifier = Modifier.padding(top = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(9.dp),
         ) {
-            Mini("INVESTED", inr(portfolio.cost), Palette.Ink, Modifier.weight(1f))
+            Mini("INVESTED", hide(locked, inr(portfolio.cost)), Palette.Ink, Modifier.weight(1f))
             Mini(
                 "TODAY",
-                signed(portfolio.day),
-                if (portfolio.day >= 0) Palette.Up else Palette.Down,
+                hide(locked, signed(portfolio.day)),
+                if (locked || portfolio.day >= 0) Palette.Up else Palette.Down,
                 Modifier.weight(1f),
             )
-            Mini("HOLDINGS", holdings.size.toString(), Palette.Ink, Modifier.weight(1f))
+            Mini("HOLDINGS", hide(locked, holdings.size.toString()), Palette.Ink, Modifier.weight(1f))
         }
         }
 
@@ -435,21 +470,24 @@ private fun Stocks(model: MoneyViewModel, accent: Color, onLeaveForResult: () ->
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column {
-                    Text(holding.symbol, style = Type.mono(12.0), color = Palette.Ink)
+                    Text(hide(locked, holding.symbol), style = Type.mono(12.0), color = Palette.Ink)
                     Text(
-                        text = units(holding.quantity) + " · AVG " + inr(holding.average),
+                        text = hide(locked, units(holding.quantity) + " · AVG " + inr(holding.average)),
                         style = Type.mono(8.5),
                         color = Palette.Dim,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text(inr(holding.value), style = Type.mono(12.0), color = Palette.Ink)
+                    Text(hide(locked, inr(holding.value)), style = Type.mono(12.0), color = Palette.Ink)
                     Text(
-                        text = signed(holding.profit) +
-                            String.format(Locale.US, " (%.1f%%)", holding.profitPct),
+                        text = hide(
+                            locked,
+                            signed(holding.profit) +
+                                String.format(Locale.US, " (%.1f%%)", holding.profitPct),
+                        ),
                         style = Type.mono(9.0),
-                        color = if (holding.profit >= 0) Palette.Up else Palette.Down,
+                        color = if (locked || holding.profit >= 0) Palette.Up else Palette.Down,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
@@ -554,5 +592,31 @@ private fun Mini(label: String, value: String, tint: Color, modifier: Modifier =
             maxLines = 1,
             modifier = Modifier.padding(top = 6.dp),
         )
+    }
+}
+
+/** A locked pane keeps its shape and loses its figures. */
+private fun hide(locked: Boolean, value: String) = if (locked) "****" else value
+
+@Composable
+private fun UnlockBar(accent: Color, onUnlock: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 12.dp)
+            .background(Palette.Fill, RoundedCornerShape(13.dp))
+            .border(1.dp, Palette.HairlineLoud, RoundedCornerShape(13.dp))
+            .clickable(onClick = onUnlock)
+            .padding(horizontal = 13.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Lock,
+            contentDescription = null,
+            tint = accent,
+            modifier = Modifier.size(14.dp),
+        )
+        Text("UNLOCK", style = Type.Micro, color = accent)
     }
 }

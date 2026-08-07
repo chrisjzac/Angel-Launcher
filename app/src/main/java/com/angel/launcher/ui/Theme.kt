@@ -103,14 +103,6 @@ object Metrics {
     const val QUICK_ACTION_NUDGE_X_DP = -16
     const val QUICK_ACTION_NUDGE_Y_DP = -24
 
-    /**
-     * Fraction of display height. SPEC 7 derives 0.80 from the Galaxy S23's
-     * ultrasonic reader; measured against the real handset the indicator sat
-     * below the sensor, so it is raised. One number to nudge per device.
-     */
-    const val SENSOR_Y_FRACTION = 0.76f
-    const val SENSOR_INDICATOR_DP = 72
-    const val GATE_COPY_Y_FRACTION = 0.32f
 
     const val SKY_CROSSFADE_MS = 900
     const val PAGE_SETTLE_MS = 340

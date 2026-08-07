@@ -28,7 +28,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.angel.launcher.gate.BiometricGate
+import com.angel.launcher.gate.rememberUnlock
 import com.angel.launcher.home.HomePane
 import com.angel.launcher.home.HomeViewModel
 import com.angel.launcher.launcher.AppsViewModel
@@ -60,7 +60,6 @@ fun AngelApp(resetSignal: Int) {
     val pagerState = rememberPagerState(initialPage = 1) { 3 }
     var letter by remember { mutableStateOf<Char?>(null) }
     var torchOn by remember { mutableStateOf(false) }
-    var homeUnlocked by remember { mutableStateOf(false) }
     var moneyUnlocked by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(Date()) }
     // A pane that opens a file picker or a settings screen stops this activity.
@@ -104,12 +103,12 @@ fun AngelApp(resetSignal: Int) {
         pagerState.animateScrollToPage(1)
     }
 
-    // Re-lock whenever the page loses focus, not on a timer.
+    val unlockMoney = rememberUnlock("Money") { moneyUnlocked = true }
+
+    // Home Assistant is open; only the figures on Money are gated. Re-lock
+    // whenever the page loses focus, not on a timer.
     LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage != 0) {
-            homeUnlocked = false
-            home.disconnect()
-        }
+        if (pagerState.currentPage == 0) home.connect() else home.disconnect()
         if (pagerState.currentPage != 2) moneyUnlocked = false
     }
 
@@ -120,7 +119,6 @@ fun AngelApp(resetSignal: Int) {
                 Lifecycle.Event.ON_STOP -> if (skipRelockOnce) {
                     skipRelockOnce = false
                 } else {
-                    homeUnlocked = false
                     moneyUnlocked = false
                     home.disconnect()
                 }
@@ -145,18 +143,7 @@ fun AngelApp(resetSignal: Int) {
                     .systemBarsPadding(),
             ) { page ->
                 when (page) {
-                    0 -> if (homeUnlocked) {
-                        HomePane(home, sky.accent)
-                    } else {
-                        BiometricGate(
-                            title = "Home Assistant",
-                            blurb = "Unlock to reach your devices. Locks again when you leave.",
-                            accent = sky.accent,
-                        ) {
-                            homeUnlocked = true
-                            home.connect()
-                        }
-                    }
+                    0 -> HomePane(home, sky.accent)
 
                     1 -> LauncherPane(
                         apps = allApps,
@@ -191,21 +178,13 @@ fun AngelApp(resetSignal: Int) {
                         onTorch = { torchOn = it },
                     )
 
-                    else -> if (moneyUnlocked) {
-                        MoneyPane(
-                            model = money,
-                            accent = sky.accent,
-                            onLeaveForResult = { skipRelockOnce = true },
-                        )
-                    } else {
-                        BiometricGate(
-                            title = "Money",
-                            blurb = "Unlock to read your payment messages and holdings.",
-                            accent = sky.accent,
-                        ) {
-                            moneyUnlocked = true
-                        }
-                    }
+                    else -> MoneyPane(
+                        model = money,
+                        accent = sky.accent,
+                        locked = !moneyUnlocked,
+                        onUnlock = unlockMoney,
+                        onLeaveForResult = { skipRelockOnce = true },
+                    )
                 }
             }
         }
