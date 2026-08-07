@@ -34,7 +34,16 @@ class MainActivity : FragmentActivity() {
             },
         )
 
-        setContent { AngelApp(resetSignal.intValue) }
+        Crash.install(applicationContext)
+
+        // Read once and drop it, so the report shows exactly once and the
+        // next open is a real launch attempt.
+        val trace = Crash.pending(this)
+        if (trace != null) Crash.clear(this)
+
+        setContent {
+            if (trace != null) CrashReport(trace) else AngelApp(resetSignal.intValue)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
