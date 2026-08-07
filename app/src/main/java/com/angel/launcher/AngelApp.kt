@@ -78,7 +78,7 @@ fun AngelApp(resetSignal: Int) {
 
     val askLocation = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) weather.refresh() }
+    ) { granted -> if (granted) weather.refresh(force = true) }
 
     LaunchedEffect(Unit) {
         val granted = ContextCompat.checkSelfPermission(
@@ -113,10 +113,16 @@ fun AngelApp(resetSignal: Int) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
-                homeUnlocked = false
-                moneyUnlocked = false
-                home.disconnect()
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    homeUnlocked = false
+                    moneyUnlocked = false
+                    home.disconnect()
+                }
+                // Coming back is the other moment location may have been
+                // turned on; the receiver only catches it while we are alive.
+                Lifecycle.Event.ON_RESUME -> weather.refresh()
+                else -> Unit
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

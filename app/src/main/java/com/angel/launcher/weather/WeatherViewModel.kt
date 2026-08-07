@@ -2,9 +2,15 @@ package com.angel.launcher.weather
 
 import android.Manifest
 import android.app.Application
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationManager
 import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.angel.launcher.data.Prefs
@@ -26,7 +32,8 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
-enum class SkyMode { LOCATING, LIVE, MANUAL, OFF }
+/** LIVE is a fresh fix; CACHED is a real forecast for where we last were. */
+enum class SkyMode { LOCATING, LIVE, CACHED, MANUAL, OFF }
 
 class WeatherViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -43,42 +50,84 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
     private val _mode = MutableStateFlow(SkyMode.LOCATING)
     val mode: StateFlow<SkyMode> = _mode.asStateFlow()
 
+    private var lastFetch = 0L
+
+    /** Location toggled in quick settings: take the fix we could not get before. */
+    private val providerWatcher = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (locationEnabled()) refresh(force = true)
+        }
+    }
+
     init {
+        ContextCompat.registerReceiver(
+            app,
+            providerWatcher,
+            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         // Last good reading first — first paint never waits on the network.
         viewModelScope.launch {
             val (key, cached) = Prefs.sky(getApplication()).first()
             Sky.byKey(key)?.let { _sky.value = it }
             if (cached != null) _temp.value = cached
         }
-        refresh()
+        refresh(force = true)
     }
 
-    fun refresh() {
+    override fun onCleared() {
+        runCatching { getApplication<Application>().unregisterReceiver(providerWatcher) }
+    }
+
+    /**
+     * A fresh fix when location allows it, otherwise the current forecast for
+     * the last place we knew. Only a hand-picked sky is left alone.
+     */
+    fun refresh(force: Boolean = false) {
+        if (_mode.value == SkyMode.MANUAL && !force) return
+        val age = System.currentTimeMillis() - lastFetch
+        if (!force && age < MIN_INTERVAL_MS) return
+
         viewModelScope.launch {
             val context = getApplication<Application>()
             val granted = ContextCompat.checkSelfPermission(
                 context, Manifest.permission.ACCESS_COARSE_LOCATION,
             ) == PackageManager.PERMISSION_GRANTED
-            if (!granted) {
+
+            val fix = if (granted && locationEnabled()) {
+                _mode.value = SkyMode.LOCATING
+                runCatching { currentLocation() }.getOrNull()
+            } else {
+                null
+            }
+
+            if (fix != null) {
+                Prefs.setLastFix(context, fix.latitude, fix.longitude)
+                apply(fix.latitude, fix.longitude, SkyMode.LIVE)
+                return@launch
+            }
+
+            // No fix: the last place still has weather worth showing.
+            val remembered = Prefs.lastFix(context).first()
+            if (remembered == null) {
                 _mode.value = SkyMode.OFF
                 return@launch
             }
-            _mode.value = SkyMode.LOCATING
-            val here = runCatching { currentLocation() }.getOrNull()
-            if (here == null) {
-                _mode.value = SkyMode.OFF
-                return@launch
-            }
-            val reading = withContext(Dispatchers.IO) { fetch(here.latitude, here.longitude) }
-            if (reading == null) {
-                _mode.value = SkyMode.OFF
-                return@launch
-            }
-            _sky.value = Sky.fromWmoCode(reading.first)
-            _temp.value = reading.second
-            _mode.value = SkyMode.LIVE
-            Prefs.setSky(context, _sky.value.key, reading.second)
+            apply(remembered.first, remembered.second, SkyMode.CACHED)
         }
+    }
+
+    private suspend fun apply(lat: Double, lon: Double, success: SkyMode) {
+        val reading = withContext(Dispatchers.IO) { fetch(lat, lon) }
+        if (reading == null) {
+            _mode.value = SkyMode.OFF
+            return
+        }
+        lastFetch = System.currentTimeMillis()
+        _sky.value = Sky.fromWmoCode(reading.first)
+        _temp.value = reading.second
+        _mode.value = success
+        Prefs.setSky(getApplication(), _sky.value.key, reading.second)
     }
 
     /** Tap the pill to walk the six palettes by hand. */
@@ -86,6 +135,12 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         val next = Sky.all[(Sky.all.indexOf(_sky.value) + 1) % Sky.all.size]
         _sky.value = next
         _mode.value = SkyMode.MANUAL
+    }
+
+    private fun locationEnabled(): Boolean {
+        val manager = getApplication<Application>()
+            .getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return false
+        return runCatching { LocationManagerCompat.isLocationEnabled(manager) }.getOrDefault(false)
     }
 
     private suspend fun currentLocation(): Location? {
@@ -124,4 +179,8 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
             current.getInt("weather_code") to Math.round(current.getDouble("temperature_2m")).toInt()
         }
     }.getOrNull()
+
+    private companion object {
+        const val MIN_INTERVAL_MS = 10 * 60 * 1000L
+    }
 }

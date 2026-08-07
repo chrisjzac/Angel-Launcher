@@ -95,8 +95,20 @@ object Metrics {
     const val SWIPE_COMMIT_DP = 70            // or 0.2 * width, whichever is smaller
     const val QUICK_ACTION_TRIP_DP = 28
 
-    /** Fraction of display height. Galaxy S23 ultrasonic reader. */
-    const val SENSOR_Y_FRACTION = 0.80f
+    /**
+     * SPEC 5 puts the quick action 56dp in from the right edge, hard against
+     * the foot. On device that sits further out and lower than a thumb
+     * naturally falls, so it is pulled in and lifted.
+     */
+    const val QUICK_ACTION_NUDGE_X_DP = -16
+    const val QUICK_ACTION_NUDGE_Y_DP = -24
+
+    /**
+     * Fraction of display height. SPEC 7 derives 0.80 from the Galaxy S23's
+     * ultrasonic reader; measured against the real handset the indicator sat
+     * below the sensor, so it is raised. One number to nudge per device.
+     */
+    const val SENSOR_Y_FRACTION = 0.76f
     const val SENSOR_INDICATOR_DP = 72
     const val GATE_COPY_Y_FRACTION = 0.32f
 

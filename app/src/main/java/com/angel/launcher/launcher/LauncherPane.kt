@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -222,7 +223,16 @@ fun LauncherPane(
                 }
                 PageDots(pageIndex, sky.accent, modifier = Modifier.padding(top = 12.dp))
             }
-            QuickAction(accent = sky.accent, torchOn = torchOn, onTorch = onTorch)
+            QuickAction(
+                accent = sky.accent,
+                torchOn = torchOn,
+                onTorch = onTorch,
+                // Offset, not padding: the dots and hint keep their positions.
+                modifier = Modifier.offset(
+                    x = Metrics.QUICK_ACTION_NUDGE_X_DP.dp,
+                    y = Metrics.QUICK_ACTION_NUDGE_Y_DP.dp,
+                ),
+            )
         }
     }
 }
@@ -374,6 +384,7 @@ private fun WeatherPill(
         SkyMode.OFF -> "Location off — tap to set"
         SkyMode.MANUAL -> sky.label + " · set by hand"
         SkyMode.LIVE -> sky.label + (temperature?.let { " · $it°" } ?: "")
+        SkyMode.CACHED -> sky.label + (temperature?.let { " · $it°" } ?: "") + " · last known"
     }.uppercase(Locale.getDefault())
 
     val spin = rememberInfiniteTransition(label = "spin")

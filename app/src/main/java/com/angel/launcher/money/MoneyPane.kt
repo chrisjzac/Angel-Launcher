@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -44,6 +45,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.angel.launcher.ui.Palette
 import com.angel.launcher.ui.Type
 import kotlinx.coroutines.delay
@@ -105,7 +109,19 @@ private fun Payments(model: MoneyViewModel, accent: Color) {
     var showSkipped by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
     var draft by remember { mutableStateOf("") }
-    val listenerOn = remember { PaymentNotificationListener.granted(context) }
+    // Re-read on resume: the grant happens in Settings, outside this process,
+    // and a remembered value would still say "off" when you came back.
+    var listenerOn by remember { mutableStateOf(PaymentNotificationListener.granted(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                listenerOn = PaymentNotificationListener.granted(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     Column(
         modifier = Modifier
