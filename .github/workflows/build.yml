@@ -20,7 +20,14 @@ jobs:
       - uses: android-actions/setup-android@v3
 
       - name: Assemble debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Locate the Google Fonts certificate array
+        if: always()
+        run: |
+          echo "Artifacts defining com_google_android_gms_fonts_certs:"
+          grep -rl 'com_google_android_gms_fonts_certs' ~/.gradle/caches \
+            --include='*.xml' 2>/dev/null | head -20 || echo "  none found"
 
       - name: Rename APK
         run: |
