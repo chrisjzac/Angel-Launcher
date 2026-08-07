@@ -135,6 +135,21 @@ class AppsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Drag-to-reorder on the pinned list. Positions are the stored order. */
+    fun movePinned(from: Int, to: Int) {
+        val current = pinnedKeys.value
+        if (from !in current.indices || to !in current.indices || from == to) return
+        val next = current.toMutableList().apply { add(to, removeAt(from)) }
+        viewModelScope.launch { Prefs.setPinned(getApplication(), next) }
+    }
+
+    fun uninstall(app: LaunchableApp) {
+        val intent = Intent(Intent.ACTION_DELETE)
+            .setData(Uri.fromParts("package", app.packageName, null))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { getApplication<Application>().startActivity(intent) }
+    }
+
     fun launch(app: LaunchableApp) {
         val context = getApplication<Application>()
         val intent = Intent(Intent.ACTION_MAIN)

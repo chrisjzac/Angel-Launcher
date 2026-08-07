@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -121,62 +123,67 @@ fun AngelApp(resetSignal: Int) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Palette.Ground)) {
-        SkyWallpaper(sky)
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Box(modifier = Modifier.fillMaxSize().background(Palette.Ground)) {
+            SkyWallpaper(sky)
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxSize()
-                .systemBarsPadding(),
-        ) { page ->
-            when (page) {
-                0 -> if (homeUnlocked) {
-                    HomePane(home, sky.accent)
-                } else {
-                    BiometricGate(
-                        title = "Home Assistant",
-                        blurb = "Unlock to reach your devices. Locks again when you leave.",
-                        accent = sky.accent,
-                    ) {
-                        homeUnlocked = true
-                        home.connect()
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .systemBarsPadding(),
+            ) { page ->
+                when (page) {
+                    0 -> if (homeUnlocked) {
+                        HomePane(home, sky.accent)
+                    } else {
+                        BiometricGate(
+                            title = "Home Assistant",
+                            blurb = "Unlock to reach your devices. Locks again when you leave.",
+                            accent = sky.accent,
+                        ) {
+                            homeUnlocked = true
+                            home.connect()
+                        }
                     }
-                }
 
-                1 -> LauncherPane(
-                    apps = allApps,
-                    pinned = pinned,
-                    icons = icons,
-                    letter = letter,
-                    sky = sky,
-                    skyMode = skyMode,
-                    temperature = temperature,
-                    now = now,
-                    calm = calm,
-                    torchOn = torchOn,
-                    pageIndex = pagerState.currentPage,
-                    onLetter = { letter = it },
-                    onSkyTap = {
-                        val granted = ContextCompat.checkSelfPermission(
-                            context, Manifest.permission.ACCESS_COARSE_LOCATION,
-                        ) == PackageManager.PERMISSION_GRANTED
-                        if (granted) weather.cycle() else askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
-                    },
-                    onLaunch = apps::launch,
-                    onPin = apps::togglePin,
-                    onTorch = { torchOn = it },
-                )
+                    1 -> LauncherPane(
+                        apps = allApps,
+                        pinned = pinned,
+                        icons = icons,
+                        letter = letter,
+                        sky = sky,
+                        skyMode = skyMode,
+                        temperature = temperature,
+                        now = now,
+                        calm = calm,
+                        torchOn = torchOn,
+                        pageIndex = pagerState.currentPage,
+                        onLetter = { letter = it },
+                        onSkyTap = {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context, Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (granted) weather.cycle() else askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                        },
+                        onLaunch = apps::launch,
+                        onPin = apps::togglePin,
+                        onMove = apps::movePinned,
+                        onAppInfo = apps::openAppInfo,
+                        onUninstall = apps::uninstall,
+                        onTorch = { torchOn = it },
+                    )
 
-                else -> if (moneyUnlocked) {
-                    MoneyPane(money, sky.accent)
-                } else {
-                    BiometricGate(
-                        title = "Money",
-                        blurb = "Unlock to read your payment messages and holdings.",
-                        accent = sky.accent,
-                    ) {
-                        moneyUnlocked = true
+                    else -> if (moneyUnlocked) {
+                        MoneyPane(money, sky.accent)
+                    } else {
+                        BiometricGate(
+                            title = "Money",
+                            blurb = "Unlock to read your payment messages and holdings.",
+                            accent = sky.accent,
+                        ) {
+                            moneyUnlocked = true
+                        }
                     }
                 }
             }
