@@ -60,7 +60,11 @@ private val Card = RoundedCornerShape(16.dp)
 private val Small = RoundedCornerShape(14.dp)
 
 @Composable
-fun MoneyPane(model: MoneyViewModel, accent: Color) {
+fun MoneyPane(
+    model: MoneyViewModel,
+    accent: Color,
+    onLeaveForResult: () -> Unit,
+) {
     var tab by remember { mutableStateOf(0) }
 
     Column(
@@ -70,7 +74,11 @@ fun MoneyPane(model: MoneyViewModel, accent: Color) {
             .padding(start = 22.dp, end = 22.dp, top = 34.dp, bottom = 24.dp),
     ) {
         Tabs(tab) { tab = it }
-        if (tab == 0) Payments(model, accent) else Stocks(model, accent)
+        if (tab == 0) {
+            Payments(model, accent, onLeaveForResult)
+        } else {
+            Stocks(model, accent, onLeaveForResult)
+        }
     }
 }
 
@@ -105,7 +113,7 @@ private fun Tabs(selected: Int, onSelect: (Int) -> Unit) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Payments(model: MoneyViewModel, accent: Color) {
+private fun Payments(model: MoneyViewModel, accent: Color, onLeaveForResult: () -> Unit) {
     val context = LocalContext.current
     val ledger by model.ledger.collectAsState()
     val scanning by model.scanning.collectAsState()
@@ -154,6 +162,7 @@ private fun Payments(model: MoneyViewModel, accent: Color) {
                 .combinedClickable(
                     onClick = {
                         if (!listenerOn) {
+                            onLeaveForResult()
                             runCatching {
                                 context.startActivity(
                                     Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
@@ -330,10 +339,9 @@ private fun Payments(model: MoneyViewModel, accent: Color) {
 }
 
 @Composable
-private fun Stocks(model: MoneyViewModel, accent: Color) {
+private fun Stocks(model: MoneyViewModel, accent: Color, onLeaveForResult: () -> Unit) {
     val holdings by model.holdings.collectAsState()
     val spark by model.spark.collectAsState()
-    val imported by model.imported.collectAsState()
     val importResult by model.importResult.collectAsState()
     val portfolio = remember(holdings) { model.portfolio() }
 
@@ -349,18 +357,21 @@ private fun Stocks(model: MoneyViewModel, accent: Color) {
         }
     }
 
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(3500)
-            model.tick()
-        }
-    }
-
     Column(
         modifier = Modifier
             .padding(top = 16.dp)
             .verticalScroll(rememberScrollState()),
     ) {
+        if (holdings.isEmpty()) {
+            Text(
+                text = "Nothing imported yet.",
+                style = Type.Prose,
+                color = Palette.Dim,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+
+        if (holdings.isNotEmpty()) {
         Column(modifier = Modifier.padding(bottom = 16.dp)) {
             Text("PORTFOLIO", style = Type.MicroSmall, color = Palette.Dim)
             Text(
@@ -413,6 +424,7 @@ private fun Stocks(model: MoneyViewModel, accent: Color) {
             )
             Mini("HOLDINGS", holdings.size.toString(), Palette.Ink, Modifier.weight(1f))
         }
+        }
 
         holdings.forEach { holding ->
             Row(
@@ -425,7 +437,7 @@ private fun Stocks(model: MoneyViewModel, accent: Color) {
                 Column {
                     Text(holding.symbol, style = Type.mono(12.0), color = Palette.Ink)
                     Text(
-                        text = "${holding.quantity} SH · AVG ${inr(holding.average)}",
+                        text = units(holding.quantity) + " · AVG " + inr(holding.average),
                         style = Type.mono(8.5),
                         color = Palette.Dim,
                         modifier = Modifier.padding(top = 4.dp),
@@ -455,7 +467,10 @@ private fun Stocks(model: MoneyViewModel, accent: Color) {
                 .fillMaxWidth()
                 .padding(top = 16.dp)
                 .border(1.dp, Palette.HairlineLoud, RoundedCornerShape(13.dp))
-                .clickable { picker.launch(arrayOf("*/*")) }
+                .clickable {
+                    onLeaveForResult()
+                    picker.launch(arrayOf("*/*"))
+                }
                 .padding(horizontal = 13.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(9.dp),
@@ -467,22 +482,24 @@ private fun Stocks(model: MoneyViewModel, accent: Color) {
                 modifier = Modifier.size(14.dp),
             )
             Text(
-                text = importResult ?: "IMPORT HOLDINGS · CSV FROM CDSL OR YOUR BROKER",
+                text = importResult ?: "IMPORT HOLDINGS · CSV OR XLSX",
                 style = Type.MicroSmall,
                 color = if (importResult != null) accent else Palette.Dim,
             )
         }
 
-        Text(
-            text = when {
-                model.liveQuotes -> "PRICES LIVE"
-                imported -> "PRICES AS IMPORTED · WIRE A QUOTES API TO GO LIVE"
-                else -> "SAMPLE HOLDINGS · PRICES SIMULATED"
-            },
-            style = Type.mono(8.0),
-            color = Palette.Dim,
-            modifier = Modifier.padding(top = 10.dp),
-        )
+        if (holdings.isNotEmpty()) {
+            Text(
+                text = if (model.liveQuotes) {
+                    "PRICES LIVE"
+                } else {
+                    "PRICES AS IMPORTED · WIRE A QUOTES API TO GO LIVE"
+                },
+                style = Type.mono(8.0),
+                color = Palette.Dim,
+                modifier = Modifier.padding(top = 10.dp),
+            )
+        }
         Spacer(Modifier.height(24.dp))
     }
 }

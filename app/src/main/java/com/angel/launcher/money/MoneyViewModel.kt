@@ -22,12 +22,11 @@ import org.json.JSONObject
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
-import kotlin.random.Random
 
 data class Holding(
     val symbol: String,
     val name: String,
-    val quantity: Int,
+    val quantity: Double,
     val average: Double,
     val last: Double,
     val open: Double,
@@ -61,14 +60,6 @@ data class Ledger(
     val net: Double get() = inn - out
 }
 
-private val DEFAULT_HOLDINGS = listOf(
-    Holding("INFY", "Infosys", 40, 1480.0, 1596.40, 1596.40),
-    Holding("TCS", "Tata Consultancy", 12, 3720.0, 3588.15, 3588.15),
-    Holding("HDFCBANK", "HDFC Bank", 25, 1520.0, 1673.80, 1673.80),
-    Holding("RELIANCE", "Reliance", 18, 2740.0, 2891.05, 2891.05),
-    Holding("NIFTYBEES", "Nifty 50 ETF", 150, 248.0, 271.60, 271.60),
-)
-
 class MoneyViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _scanning = MutableStateFlow(false)
@@ -78,27 +69,22 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
         .map { messages -> fold(SmsParser.parseAll(messages), messages.size) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Ledger())
 
-    private val _holdings = MutableStateFlow(DEFAULT_HOLDINGS)
+    private val _holdings = MutableStateFlow(emptyList<Holding>())
     val holdings: StateFlow<List<Holding>> = _holdings.asStateFlow()
 
     private val _spark = MutableStateFlow<List<Double>>(emptyList())
     val spark: StateFlow<List<Double>> = _spark.asStateFlow()
 
-    /** True once holdings came from a real export rather than the sample set. */
-    private val _imported = MutableStateFlow(false)
-    val imported: StateFlow<Boolean> = _imported.asStateFlow()
-
     private val _importResult = MutableStateFlow<String?>(null)
     val importResult: StateFlow<String?> = _importResult.asStateFlow()
 
-    /** Live quotes need a keyed API; without one the ticks are simulated. */
+    /** Live quotes need a keyed API. Without one, prices are as imported. */
     val liveQuotes: Boolean = BuildConfig.QUOTES_API_KEY.isNotBlank()
 
     init {
         viewModelScope.launch {
             val saved = Prefs.holdings(app).first()
             if (saved != null) decode(saved)?.let { _holdings.value = it }
-            _imported.value = Prefs.holdingsImported(app).first()
             _spark.value = listOf(portfolio().value)
         }
     }
@@ -109,28 +95,41 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun importHoldings(uri: Uri) {
         viewModelScope.launch {
-            val text = withContext(Dispatchers.IO) {
+            val bytes = withContext(Dispatchers.IO) {
                 runCatching {
                     getApplication<Application>().contentResolver
                         .openInputStream(uri)
-                        ?.bufferedReader()
-                        ?.use { it.readText() }
+                        ?.use { it.readBytes() }
                 }.getOrNull()
             }
-            if (text.isNullOrBlank()) {
+            if (bytes == null || bytes.isEmpty()) {
                 _importResult.value = "Could not read that file"
                 return@launch
             }
-            val parsed = HoldingsCsv.parse(text)
+
+            val parsed = withContext(Dispatchers.Default) {
+                runCatching {
+                    // xlsx is a zip; anything else is read as text.
+                    if (bytes.size > 1 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte()) {
+                        // Equity, mutual funds and combined are separate tabs;
+                        // the fullest one is the one worth taking.
+                        Xlsx.sheets(bytes.inputStream())
+                            .map { HoldingsCsv.fromRows(it) }
+                            .maxByOrNull { it.size }
+                            .orEmpty()
+                    } else {
+                        HoldingsCsv.parse(bytes.decodeToString())
+                    }
+                }.getOrDefault(emptyList())
+            }
+
             if (parsed.isEmpty()) {
                 _importResult.value = "No holdings found in that file"
                 return@launch
             }
             _holdings.value = parsed
-            _imported.value = true
             _spark.value = listOf(portfolio().value)
             Prefs.setHoldings(getApplication(), encode(parsed))
-            Prefs.setHoldingsImported(getApplication(), true)
             _importResult.value = "Imported " + parsed.size + " holdings"
         }
     }
@@ -158,16 +157,6 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
 
     fun forget() {
         viewModelScope.launch { Prefs.clearMessages(getApplication()) }
-    }
-
-    /** One market tick. Replace with a quotes API when a key is present. */
-    fun tick() {
-        if (liveQuotes || _imported.value) return
-        _holdings.value = _holdings.value.map {
-            it.copy(last = (it.last * (1 + (Random.nextDouble() - 0.5) * 0.005)).round2())
-        }
-        _spark.value = (_spark.value + portfolio().value).takeLast(40)
-        viewModelScope.launch { Prefs.setHoldings(getApplication(), encode(_holdings.value)) }
     }
 
     fun portfolio(): Portfolio {
@@ -226,7 +215,7 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
             Holding(
                 symbol = o.getString("symbol"),
                 name = o.getString("name"),
-                quantity = o.getInt("quantity"),
+                quantity = o.getDouble("quantity"),
                 average = o.getDouble("average"),
                 last = o.getDouble("last"),
                 open = o.getDouble("open"),
@@ -234,8 +223,6 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
 }
-
-private fun Double.round2(): Double = Math.round(this * 100.0) / 100.0
 
 private val inrFormat: NumberFormat = NumberFormat.getInstance(Locale("en", "IN"))
 
@@ -245,6 +232,11 @@ fun inr(amount: Double, decimals: Int = 0): String {
     inrFormat.maximumFractionDigits = decimals
     return "₹" + inrFormat.format(amount)
 }
+
+/** Whole share counts stay whole; fund units keep their fraction. */
+fun units(quantity: Double): String =
+    if (quantity % 1.0 == 0.0) quantity.toLong().toString()
+    else String.format(Locale.US, "%.3f", quantity)
 
 fun signed(amount: Double, decimals: Int = 0): String =
     (if (amount >= 0) "+" else "−") + inr(abs(amount), decimals)

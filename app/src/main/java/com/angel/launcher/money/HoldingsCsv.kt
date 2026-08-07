@@ -19,23 +19,33 @@ object HoldingsCsv {
         "name", "company", "companyname", "securityname", "scripdescription", "description",
     )
     private val QUANTITY = listOf(
-        "qty", "quantity", "shares", "units", "holding", "holdings",
+        "quantityavailable", "qty", "quantity", "shares", "units", "holding", "holdings",
         "freebalance", "currentbalance", "closingbalance", "balance",
     )
+
+    /**
+     * Pledged stock is still owned, so it is added to the free quantity.
+     * "Long term" and "discrepant" are subsets of it and must not be.
+     */
+    private val ALSO_HELD = listOf("quantitypledgedmargin", "quantitypledgedloan")
     private val AVERAGE = listOf(
         "avg", "avgprice", "averageprice", "avgcost", "averagecost",
         "buyavg", "buyaverage", "costprice", "cost",
     )
     private val PRICE = listOf(
-        "ltp", "lastprice", "lasttradedprice", "marketprice", "closeprice", "close",
+        "ltp", "lastprice", "lasttradedprice", "previousclosingprice", "previousclose",
+        "prevclose", "marketprice", "closingprice", "closeprice", "close",
         "currentprice", "marketrate", "rate", "price", "nav",
     )
 
-    fun parse(text: String): List<Holding> {
-        val rows = text.lineSequence()
-            .map { splitCsv(it) }
-            .filter { row -> row.any { it.isNotBlank() } }
-            .toList()
+    fun parse(text: String): List<Holding> = fromRows(text.lineSequence().map { splitCsv(it) }.toList())
+
+    /**
+     * Shared by both importers: a spreadsheet and a CSV differ only in how the
+     * rows were obtained.
+     */
+    fun fromRows(input: List<List<String>>): List<Holding> {
+        val rows = input.filter { row -> row.any { it.isNotBlank() } }
 
         val headerAt = rows.indexOfFirst { row ->
             val keys = row.map { normalise(it) }
@@ -52,6 +62,7 @@ object HoldingsCsv {
             return -1
         }
 
+        val alsoHeldAt = ALSO_HELD.mapNotNull { name -> header.indexOf(name).takeIf { it >= 0 } }
         val symbolAt = column(SYMBOL)
         val quantityAt = column(QUANTITY)
         val nameAt = column(NAME)
@@ -60,8 +71,9 @@ object HoldingsCsv {
 
         return rows.drop(headerAt + 1).mapNotNull { row ->
             val symbol = row.getOrNull(symbolAt)?.trim().orEmpty()
-            val quantity = number(row.getOrNull(quantityAt))?.toInt() ?: 0
-            if (symbol.isBlank() || quantity <= 0) return@mapNotNull null
+            val quantity = (number(row.getOrNull(quantityAt)) ?: 0.0) +
+                alsoHeldAt.sumOf { number(row.getOrNull(it)) ?: 0.0 }
+            if (symbol.isBlank() || quantity <= 0.0) return@mapNotNull null
 
             val average = number(row.getOrNull(averageAt))
             val price = number(row.getOrNull(priceAt))

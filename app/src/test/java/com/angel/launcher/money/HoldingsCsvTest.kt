@@ -18,7 +18,7 @@ class HoldingsCsvTest {
 
         assertEquals(2, holdings.size)
         assertEquals("INFY", holdings[0].symbol)
-        assertEquals(40, holdings[0].quantity)
+        assertEquals(40.0, holdings[0].quantity, 0.001)
         assertEquals(1480.0, holdings[0].average, 0.001)
         assertEquals(1596.40, holdings[0].last, 0.001)
     }
@@ -35,7 +35,7 @@ class HoldingsCsvTest {
 
         assertEquals(1, holdings.size)
         assertEquals("INFOSYS LIMITED", holdings[0].name)
-        assertEquals(40, holdings[0].quantity)
+        assertEquals(40.0, holdings[0].quantity, 0.001)
         assertEquals(0.0, holdings[0].profit, 0.001)
     }
 
@@ -68,7 +68,7 @@ class HoldingsCsvTest {
 
         assertEquals(1, holdings.size)
         assertEquals("Nippon India ETF, Nifty 50", holdings[0].name)
-        assertEquals(150, holdings[0].quantity)
+        assertEquals(150.0, holdings[0].quantity, 0.001)
         assertEquals(248.0, holdings[0].average, 0.001)
     }
 

@@ -63,6 +63,9 @@ fun AngelApp(resetSignal: Int) {
     var homeUnlocked by remember { mutableStateOf(false) }
     var moneyUnlocked by remember { mutableStateOf(false) }
     var now by remember { mutableStateOf(Date()) }
+    // A pane that opens a file picker or a settings screen stops this activity.
+    // That is not the user walking away, so it must not re-lock behind them.
+    var skipRelockOnce by remember { mutableStateOf(false) }
 
     val calm = remember {
         Settings.Global.getFloat(
@@ -114,7 +117,9 @@ fun AngelApp(resetSignal: Int) {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> {
+                Lifecycle.Event.ON_STOP -> if (skipRelockOnce) {
+                    skipRelockOnce = false
+                } else {
                     homeUnlocked = false
                     moneyUnlocked = false
                     home.disconnect()
@@ -187,7 +192,11 @@ fun AngelApp(resetSignal: Int) {
                     )
 
                     else -> if (moneyUnlocked) {
-                        MoneyPane(money, sky.accent)
+                        MoneyPane(
+                            model = money,
+                            accent = sky.accent,
+                            onLeaveForResult = { skipRelockOnce = true },
+                        )
                     } else {
                         BiometricGate(
                             title = "Money",

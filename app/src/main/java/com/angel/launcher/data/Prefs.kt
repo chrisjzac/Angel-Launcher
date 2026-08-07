@@ -20,7 +20,6 @@ object Prefs {
     private val LON = stringPreferencesKey("lon")
     private val MESSAGES = stringPreferencesKey("messages")
     private val HOLDINGS = stringPreferencesKey("holdings")
-    private val HOLDINGS_IMPORTED = stringPreferencesKey("holdings_imported")
 
     fun pinned(c: Context): Flow<List<String>> =
         c.store.data.map { p -> p[PINNED]?.split('\n')?.filter { it.isNotBlank() } ?: emptyList() }
@@ -79,14 +78,6 @@ object Prefs {
 
     suspend fun setHoldings(c: Context, json: String) {
         c.store.edit { it[HOLDINGS] = json }
-    }
-
-    /** Real holdings must not be walked by the price simulator. */
-    fun holdingsImported(c: Context): Flow<Boolean> =
-        c.store.data.map { it[HOLDINGS_IMPORTED] == "true" }
-
-    suspend fun setHoldingsImported(c: Context, imported: Boolean) {
-        c.store.edit { it[HOLDINGS_IMPORTED] = imported.toString() }
     }
 
     /** Messages contain newlines, so records are separated by NUL, not a line break. */
