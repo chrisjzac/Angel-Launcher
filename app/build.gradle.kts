@@ -77,6 +77,12 @@ dependencies {
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.biometric:biometric:1.1.0")
+    // biometric 1.1.0 drags in fragment 1.2.x, whose FragmentActivity still
+    // rejects request codes above 16 bits — and the Activity Result API always
+    // generates them above 16 bits. Every launch() throws until fragment is
+    // pulled forward. MainActivity has to be a FragmentActivity for
+    // BiometricPrompt, so the dependency moves rather than the activity.
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
