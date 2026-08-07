@@ -166,11 +166,17 @@ fun AngelApp(resetSignal: Int) {
                         torchOn = torchOn,
                         pageIndex = pagerState.currentPage,
                         onLetter = { letter = it },
+                        // The pill only ever reports the weather, so tapping it
+                        // asks for a reading rather than offering a palette.
                         onSkyTap = {
                             val granted = ContextCompat.checkSelfPermission(
                                 context, Manifest.permission.ACCESS_COARSE_LOCATION,
                             ) == PackageManager.PERMISSION_GRANTED
-                            if (granted) weather.cycle() else askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                            if (granted) {
+                                weather.refresh(force = true)
+                            } else {
+                                askLocation.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                            }
                         },
                         onLaunch = apps::launch,
                         onPin = apps::togglePin,

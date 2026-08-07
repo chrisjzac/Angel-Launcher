@@ -33,7 +33,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
 /** LIVE is a fresh fix; CACHED is a real forecast for where we last were. */
-enum class SkyMode { LOCATING, LIVE, CACHED, MANUAL, OFF }
+enum class SkyMode { LOCATING, LIVE, CACHED, OFF }
 
 class WeatherViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -81,10 +81,9 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * A fresh fix when location allows it, otherwise the current forecast for
-     * the last place we knew. Only a hand-picked sky is left alone.
+     * the last place we knew. The sky is never anything but the real weather.
      */
     fun refresh(force: Boolean = false) {
-        if (_mode.value == SkyMode.MANUAL && !force) return
         val age = System.currentTimeMillis() - lastFetch
         if (!force && age < MIN_INTERVAL_MS) return
 
@@ -128,13 +127,6 @@ class WeatherViewModel(app: Application) : AndroidViewModel(app) {
         _temp.value = reading.second
         _mode.value = success
         Prefs.setSky(getApplication(), _sky.value.key, reading.second)
-    }
-
-    /** Tap the pill to walk the six palettes by hand. */
-    fun cycle() {
-        val next = Sky.all[(Sky.all.indexOf(_sky.value) + 1) % Sky.all.size]
-        _sky.value = next
-        _mode.value = SkyMode.MANUAL
     }
 
     private fun locationEnabled(): Boolean {

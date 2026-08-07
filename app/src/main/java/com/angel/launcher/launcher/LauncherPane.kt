@@ -382,7 +382,6 @@ private fun WeatherPill(
     val label = when (mode) {
         SkyMode.LOCATING -> "Reading the sky"
         SkyMode.OFF -> "Location off — tap to set"
-        SkyMode.MANUAL -> sky.label + " · set by hand"
         SkyMode.LIVE -> sky.label + (temperature?.let { " · $it°" } ?: "")
         SkyMode.CACHED -> sky.label + (temperature?.let { " · $it°" } ?: "") + " · last known"
     }.uppercase(Locale.getDefault())
