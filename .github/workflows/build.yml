@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
@@ -32,6 +35,19 @@ jobs:
           name: angel-launcher-debug-apk
           path: out/angel-launcher-debug.apk
           if-no-files-found: error
+
+      # One rolling release, re-uploaded in place, so the download link never
+      # changes: /releases/download/debug/angel-launcher-debug.apk
+      - name: Publish the APK
+        if: github.ref_name == 'claude/angel-launcher-build-9hynbh'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view debug >/dev/null 2>&1 \
+            || gh release create debug --title "Debug build" --notes "bootstrapping"
+          gh release upload debug out/angel-launcher-debug.apk --clobber
+          gh release edit debug --notes \
+            "Build ${{ github.run_number }} — ${GITHUB_SHA:0:7} on \`${{ github.ref_name }}\`."
 
       - name: Unit tests
         run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
