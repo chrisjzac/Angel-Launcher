@@ -2,8 +2,8 @@ name: bootstrap-font-certs
 
 # One-shot. The Google Fonts provider is verified against a certificate array
 # that no dependency ships — the app has to vendor it. This job sources that
-# array from Google's own artifacts, writes res/values/font_certs.xml, and
-# commits it. Delete this workflow once the file is in the tree.
+# array, writes res/values/font_certs.xml, and commits it. Delete this
+# workflow once the file is in the tree.
 
 on:
   workflow_dispatch:
@@ -23,10 +23,11 @@ jobs:
         run: |
           set -u
           out=app/src/main/res/values/font_certs.xml
+          mkdir -p "$(dirname "$out")"
           found=""
 
-          # Google Maven. The array lives in whichever GMS artifact still
-          # carries the font provider resources; check each rather than guess.
+          # Google Maven first: an artifact that ships the array is the most
+          # authoritative source available to a runner.
           for coord in \
             com.google.android.gms:play-services-basement:18.4.0 \
             com.google.android.gms:play-services-base:18.5.0 \
@@ -36,13 +37,18 @@ jobs:
             g=$(echo "$coord" | cut -d: -f1 | tr . /)
             a=$(echo "$coord" | cut -d: -f2)
             v=$(echo "$coord" | cut -d: -f3)
-            url="https://dl.google.com/dl/android/maven2/$g/$a/$v/$a-$v.aar"
             echo "checking $coord"
-            if curl -fsSL -o /tmp/probe.aar "$url" 2>/dev/null; then
-              if unzip -p /tmp/probe.aar 'res/values/*.xml' 2>/dev/null \
-                   | grep -q com_google_android_gms_fonts_certs; then
-                echo "  array found in $coord"
-                unzip -p /tmp/probe.aar 'res/values/*.xml' > /tmp/values.xml
+            if curl -fsSL -o /tmp/probe.aar \
+                 "https://dl.google.com/dl/android/maven2/$g/$a/$v/$a-$v.aar"; then
+              unzip -p /tmp/probe.aar 'res/values/*.xml' > /tmp/values.xml 2>/dev/null || true
+              if grep -q com_google_android_gms_fonts_certs /tmp/values.xml; then
+                echo "  array found"
+                {
+                  echo '<?xml version="1.0" encoding="utf-8"?>'
+                  echo '<resources>'
+                  sed -n '/name="com_google_android_gms_fonts_certs/,/<\/[a-z-]*array>/p' /tmp/values.xml
+                  echo '</resources>'
+                } > "$out"
                 found="$coord"
                 break
               fi
@@ -52,64 +58,42 @@ jobs:
             fi
           done
 
+          # Otherwise Google's own Downloadable Fonts sample, which carries the
+          # canonical font_certs.xml verbatim.
           if [ -z "$found" ]; then
-            echo "No Google Maven artifact carries the array; falling back to"
-            echo "Google's own Downloadable Fonts sample."
             for url in \
               https://raw.githubusercontent.com/android/user-interface-samples/main/DownloadableFonts/app/src/main/res/values/font_certs.xml \
-              https://raw.githubusercontent.com/android/testing-samples/main/ui/espresso/DownloadableFonts/app/src/main/res/values/font_certs.xml
+              https://raw.githubusercontent.com/android/user-interface-samples/master/DownloadableFonts/app/src/main/res/values/font_certs.xml \
+              https://raw.githubusercontent.com/googlesamples/android-DownloadableFonts/master/Application/src/main/res/values/font_certs.xml
             do
               echo "checking $url"
-              if curl -fsSL -o /tmp/font_certs.xml "$url" 2>/dev/null \
+              if curl -fsSL -o /tmp/font_certs.xml "$url" \
                  && grep -q com_google_android_gms_fonts_certs /tmp/font_certs.xml; then
                 echo "  fetched"
-                mkdir -p "$(dirname "$out")"
                 cp /tmp/font_certs.xml "$out"
                 found="$url"
                 break
               fi
             done
-          else
-            # Lift just the two cert arrays out of the merged values.xml.
-            mkdir -p "$(dirname "$out")"
-            {
-              echo '<?xml version="1.0" encoding="utf-8"?>'
-              echo '<resources>'
-              python3 - "$found" <<'PY'
-import re, sys
-src = open('/tmp/values.xml').read()
-for name in ('com_google_android_gms_fonts_certs',
-             'com_google_android_gms_fonts_certs_dev',
-             'com_google_android_gms_fonts_certs_prod'):
-    m = re.search(r'<(string-)?array name="%s".*?</(string-)?array>' % name, src, re.S)
-    if m:
-        print('    ' + m.group(0).strip())
-PY
-              echo '</resources>'
-            } > "$out"
           fi
 
           if [ -z "$found" ]; then
-            echo "::error::Could not source the certificate array from any known place."
+            echo "::error::Could not source the certificate array anywhere."
             exit 1
           fi
 
-          echo "--- $out"
-          cat "$out"
-          grep -c '<item' "$out"
+          echo "--- sourced from $found"
+          echo "--- $(grep -c '<item' "$out") certificate items"
+          head -5 "$out"
 
       - name: Commit the file
         run: |
           out=app/src/main/res/values/font_certs.xml
-          if git diff --quiet -- "$out" && [ -z "$(git status --porcelain "$out")" ]; then
+          if [ -z "$(git status --porcelain "$out")" ]; then
             echo "no change"; exit 0
           fi
           git config user.name  "Claude"
           git config user.email "noreply@anthropic.com"
           git add "$out"
-          git commit -m "Fonts: vendor the Google Fonts provider certificates [skip ci]
-
-The provider is verified against an array no dependency ships, so the app
-has to carry it. Sourced from Google and committed by the one-shot
-bootstrap-font-certs workflow, which can now be deleted."
+          git commit -m "Fonts: vendor the Google Fonts provider certificates [skip ci]"
           git push
