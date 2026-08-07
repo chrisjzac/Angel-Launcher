@@ -1,10 +1,12 @@
 package com.angel.launcher.money
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.angel.launcher.BuildConfig
 import com.angel.launcher.data.Prefs
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.NumberFormat
@@ -81,6 +84,13 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
     private val _spark = MutableStateFlow<List<Double>>(emptyList())
     val spark: StateFlow<List<Double>> = _spark.asStateFlow()
 
+    /** True once holdings came from a real export rather than the sample set. */
+    private val _imported = MutableStateFlow(false)
+    val imported: StateFlow<Boolean> = _imported.asStateFlow()
+
+    private val _importResult = MutableStateFlow<String?>(null)
+    val importResult: StateFlow<String?> = _importResult.asStateFlow()
+
     /** Live quotes need a keyed API; without one the ticks are simulated. */
     val liveQuotes: Boolean = BuildConfig.QUOTES_API_KEY.isNotBlank()
 
@@ -88,8 +98,45 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val saved = Prefs.holdings(app).first()
             if (saved != null) decode(saved)?.let { _holdings.value = it }
+            _imported.value = Prefs.holdingsImported(app).first()
             _spark.value = listOf(portfolio().value)
         }
+    }
+
+    /**
+     * Holdings from a CSV the user picked. There is no depository API open to
+     * a launcher, so the export is the way in — CDSL Easi, NSDL or a broker.
+     */
+    fun importHoldings(uri: Uri) {
+        viewModelScope.launch {
+            val text = withContext(Dispatchers.IO) {
+                runCatching {
+                    getApplication<Application>().contentResolver
+                        .openInputStream(uri)
+                        ?.bufferedReader()
+                        ?.use { it.readText() }
+                }.getOrNull()
+            }
+            if (text.isNullOrBlank()) {
+                _importResult.value = "Could not read that file"
+                return@launch
+            }
+            val parsed = HoldingsCsv.parse(text)
+            if (parsed.isEmpty()) {
+                _importResult.value = "No holdings found in that file"
+                return@launch
+            }
+            _holdings.value = parsed
+            _imported.value = true
+            _spark.value = listOf(portfolio().value)
+            Prefs.setHoldings(getApplication(), encode(parsed))
+            Prefs.setHoldingsImported(getApplication(), true)
+            _importResult.value = "Imported " + parsed.size + " holdings"
+        }
+    }
+
+    fun clearImportResult() {
+        _importResult.value = null
     }
 
     fun rescan() {
@@ -115,7 +162,7 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
 
     /** One market tick. Replace with a quotes API when a key is present. */
     fun tick() {
-        if (liveQuotes) return
+        if (liveQuotes || _imported.value) return
         _holdings.value = _holdings.value.map {
             it.copy(last = (it.last * (1 + (Random.nextDouble() - 0.5) * 0.005)).round2())
         }

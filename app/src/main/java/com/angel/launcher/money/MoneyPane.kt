@@ -2,6 +2,8 @@ package com.angel.launcher.money
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.TrendingDown
@@ -330,7 +333,21 @@ private fun Payments(model: MoneyViewModel, accent: Color) {
 private fun Stocks(model: MoneyViewModel, accent: Color) {
     val holdings by model.holdings.collectAsState()
     val spark by model.spark.collectAsState()
+    val imported by model.imported.collectAsState()
+    val importResult by model.importResult.collectAsState()
     val portfolio = remember(holdings) { model.portfolio() }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) model.importHoldings(uri) }
+
+    // The outcome is a line on the bar, not a dialog to dismiss.
+    LaunchedEffect(importResult) {
+        if (importResult != null) {
+            delay(4000)
+            model.clearImportResult()
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -433,14 +450,39 @@ private fun Stocks(model: MoneyViewModel, accent: Color) {
             )
         }
 
-        if (!model.liveQuotes) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp)
+                .border(1.dp, Palette.HairlineLoud, RoundedCornerShape(13.dp))
+                .clickable { picker.launch(arrayOf("*/*")) }
+                .padding(horizontal = 13.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Add,
+                contentDescription = null,
+                tint = Palette.Dim,
+                modifier = Modifier.size(14.dp),
+            )
             Text(
-                text = "PRICES SIMULATED · WIRE A QUOTES API TO GO LIVE",
-                style = Type.mono(8.0),
-                color = Palette.Dim,
-                modifier = Modifier.padding(top = 16.dp),
+                text = importResult ?: "IMPORT HOLDINGS · CSV FROM CDSL OR YOUR BROKER",
+                style = Type.MicroSmall,
+                color = if (importResult != null) accent else Palette.Dim,
             )
         }
+
+        Text(
+            text = when {
+                model.liveQuotes -> "PRICES LIVE"
+                imported -> "PRICES AS IMPORTED · WIRE A QUOTES API TO GO LIVE"
+                else -> "SAMPLE HOLDINGS · PRICES SIMULATED"
+            },
+            style = Type.mono(8.0),
+            color = Palette.Dim,
+            modifier = Modifier.padding(top = 10.dp),
+        )
         Spacer(Modifier.height(24.dp))
     }
 }
