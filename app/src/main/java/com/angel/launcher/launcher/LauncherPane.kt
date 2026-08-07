@@ -103,6 +103,7 @@ fun LauncherPane(
     onMove: (Int, Int) -> Unit,
     onAppInfo: (LaunchableApp) -> Unit,
     onUninstall: (LaunchableApp) -> Unit,
+    onTorch: (Boolean) -> Unit,
 ) {
     val byLetter = remember(apps) { apps.groupBy { it.initial } }
     val shown = if (letter == null) pinned else byLetter[letter].orEmpty()
