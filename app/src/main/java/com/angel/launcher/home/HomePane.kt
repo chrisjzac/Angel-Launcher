@@ -124,6 +124,7 @@ fun HomePane(model: HomeViewModel, accent: Color) {
             cards = cards,
             accent = accent,
             arranging = arranging,
+            loaded = all.isNotEmpty(),
             onArrange = { arranging = true },
             onAdd = {
                 arranging = true
@@ -148,6 +149,7 @@ private fun Board(
     cards: List<HomeCard>,
     accent: Color,
     arranging: Boolean,
+    loaded: Boolean,
     onArrange: () -> Unit,
     onAdd: () -> Unit,
     onToggle: (HaEntity) -> Unit,
@@ -248,8 +250,9 @@ private fun Board(
             }
         }
 
-        // Without this an emptied pane would have no way back.
-        if (arranging || cards.isEmpty()) AddSlot(accent, onAdd)
+        // Without this an emptied pane would have no way back. Waiting on
+        // `loaded` keeps it from flashing over a layout that is still resolving.
+        if (arranging || (loaded && cards.isEmpty())) AddSlot(accent, onAdd)
     }
 }
 
