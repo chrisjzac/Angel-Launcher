@@ -13,6 +13,15 @@ case "$(uname -s)" in
   Darwin) TOOLS_ZIP_URL="https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip" ;;
 esac
 
+# Fail here with a clear name rather than midway through with a cryptic error.
+for tool in curl unzip java; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "missing: $tool" >&2
+    echo "  Debian/Ubuntu: sudo apt install curl unzip openjdk-17-jdk" >&2
+    exit 1
+  }
+done
+
 SDKMANAGER="$SDK_DIR/cmdline-tools/latest/bin/sdkmanager"
 
 if [ ! -x "$SDKMANAGER" ]; then

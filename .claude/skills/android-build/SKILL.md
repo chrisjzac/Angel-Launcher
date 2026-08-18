@@ -95,7 +95,16 @@ finding, and often one that predates the current change. Check whether the base
 branch was already failing before attributing it to your work, and never
 disable a test to turn a badge green.
 
-## Delivering the build
+## Getting it onto a device
+
+When the user wants to *test* rather than just compile, the whole point is a
+loop measured in seconds. `./gradlew installDebug` builds and installs over ADB
+in one step; wireless debugging makes it cable-free and sidesteps Linux USB
+permission problems entirely. Read `references/device-testing.md` for pairing,
+the USB fallback, serving the APK over the LAN to a device with no ADB, and the
+install errors worth recognising on sight.
+
+## Delivering a build you cannot install directly
 
 A debug APK is usually 40–80 MB, which exceeds most file-delivery limits, so
 attaching it to a message often fails outright. Lead with a download link and
