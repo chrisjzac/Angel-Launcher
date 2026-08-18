@@ -112,6 +112,17 @@ mini row of Invested / Today / Holdings, then per-holding rows.
 
 ## 9 — Home pane
 
-Thermostat hero with ±0.5° steppers → sensor strip (indoor, humidity, draw) →
-2-column device grid, 8 tiles, radius 17dp. Active tile: brighter fill and its
-icon in the accent.
+Arranged by the owner, not fixed. The pane is a flat ordered list of widgets
+packed two to a row, radius 17dp, 9dp gutter; a widget marked wide takes the
+row to itself. Three shapes, chosen by the entity's domain, never stored:
+thermostat (±0.5° steppers, Bodoni 46sp target), sensor (label + reading), and
+tile (icon, name, state). Active tile: brighter fill and its icon in the accent.
+
+Long-press any widget to arrange. In arrange mode the bar reads ARRANGE in the
+accent with add and done beside it, widgets drag to reorder, and a tap opens
+wide/narrow and remove. Add lists every entity the house exposes that is not
+already placed. Nothing of this shows outside arrange mode.
+
+Until the pane is arranged once, the layout is derived: first climate wide,
+then the temperature / humidity / power sensors, then the first eight controls
+— which is what the pane showed before it was arrangeable.

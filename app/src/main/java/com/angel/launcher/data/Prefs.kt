@@ -20,6 +20,7 @@ object Prefs {
     private val LON = stringPreferencesKey("lon")
     private val MESSAGES = stringPreferencesKey("messages")
     private val HOLDINGS = stringPreferencesKey("holdings")
+    private val HOME_LAYOUT = stringPreferencesKey("home_layout")
 
     fun pinned(c: Context): Flow<List<String>> =
         c.store.data.map { p -> p[PINNED]?.split('\n')?.filter { it.isNotBlank() } ?: emptyList() }
@@ -72,6 +73,26 @@ object Prefs {
 
     suspend fun clearMessages(c: Context) {
         c.store.edit { it.remove(MESSAGES) }
+    }
+
+    /**
+     * The Home pane's arrangement, one encoded widget per line.
+     *
+     * `null` and empty mean different things: null is "never arranged", which
+     * earns the derived default layout, while an empty list is a pane the owner
+     * deliberately emptied and we must leave empty.
+     */
+    fun homeLayout(c: Context): Flow<List<String>?> =
+        c.store.data.map { p ->
+            p[HOME_LAYOUT]?.split('\n')?.filter { it.isNotBlank() }
+        }
+
+    suspend fun setHomeLayout(c: Context, lines: List<String>) {
+        c.store.edit { it[HOME_LAYOUT] = lines.joinToString("\n") }
+    }
+
+    suspend fun clearHomeLayout(c: Context) {
+        c.store.edit { it.remove(HOME_LAYOUT) }
     }
 
     fun holdings(c: Context): Flow<String?> = c.store.data.map { it[HOLDINGS] }
