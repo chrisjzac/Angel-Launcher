@@ -72,6 +72,62 @@ cd app/build/outputs/apk/debug && python3 -m http.server 8000
 The device will ask permission to install from an unknown source. Slower than
 `installDebug`, but it needs nothing installed on the device.
 
+## Remote development: edit from a tablet, install over a VPN
+
+A workable arrangement when the build machine is elsewhere: run a VS Code
+tunnel on the build machine and open it from a tablet browser, then put the
+build machine and the test device on the same Tailscale tailnet so ADB can
+reach the device from outside the LAN.
+
+```bash
+# on the build machine, once
+code tunnel service install     # survives reboots; `code tunnel` for a one-off
+tailscale up
+```
+
+Open `vscode.dev/tunnel/<name>` on the tablet. The terminal there is a real
+shell on the build machine, so `./gradlew installDebug` runs exactly as it
+would locally — the tablet is a thin client, nothing is built on it.
+
+For the agent, prefer the `claude` CLI in that terminal over the VS Code
+extension. Extensions in a browser-hosted tunnel run under more constraints
+than a desktop VS Code, whereas a terminal is a terminal; the CLI keeps working
+when the extension host is the part that breaks.
+
+### ADB over Tailscale
+
+Install Tailscale on the Android device, then connect to its tailnet address
+rather than its LAN address:
+
+```bash
+tailscale status                      # find the device's 100.x.y.z
+adb connect 100.101.102.103:41235
+```
+
+Two things to expect:
+
+- **Pair on the LAN first.** The pairing dialog advertises the Wi-Fi address,
+  and discovery uses mDNS, which does not cross a tailnet. Pair once on the
+  same network; afterwards the tailnet address works from anywhere.
+- **The port changes** whenever wireless debugging restarts, so `adb connect`
+  is a per-session step even though pairing persists.
+
+This is OEM-dependent — some vendors bind the debug port to the Wi-Fi
+interface only, in which case the tailnet route will not reach it. Try it
+before designing a workflow around it, and fall back to being on the same
+network if it does not take.
+
+### Testing a launcher on the device you are working from
+
+Worth thinking about before setting this up: a launcher becomes the Home app,
+so on the device under test every Home press leaves whatever you were doing.
+If that device is also your IDE client, you are ejected from the editor each
+time you exercise the thing you are testing.
+
+Use two devices where possible — tablet as the editor, phone as the target —
+and put both on the tailnet. With one device, keep the launcher installed but
+*not* set as default, and open it deliberately rather than making it Home.
+
 ## Install failures worth recognising
 
 **`INSTALL_FAILED_UPDATE_INCOMPATIBLE`** — a build signed with a different key
