@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 /** Keys live in local.properties, never in source. Absent key = simulated quotes. */
@@ -76,6 +77,15 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // Wealth pane only — everything else on the launcher still runs on DataStore.
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    implementation("androidx.room:room-paging:2.6.1")
+    ksp("androidx.room:room-compiler:2.6.1")
+    implementation("androidx.paging:paging-runtime-ktx:3.3.2")
+    implementation("androidx.paging:paging-compose:3.3.2")
+
     implementation("androidx.biometric:biometric:1.1.0")
     // biometric 1.1.0 drags in fragment 1.2.x, whose FragmentActivity still
     // rejects request codes above 16 bits — and the Activity Result API always

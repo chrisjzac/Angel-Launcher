@@ -7,14 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.angel.launcher.BuildConfig
 import com.angel.launcher.data.Prefs
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -23,6 +19,10 @@ import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
 
+/**
+ * Stocks tab only — the Payments tab (now the Wealth pane's spend tracker)
+ * runs on WealthViewModel + Room instead. See MoneyPane.kt.
+ */
 data class Holding(
     val symbol: String,
     val name: String,
@@ -45,29 +45,7 @@ data class Portfolio(
     val profitPct: Double,
 )
 
-data class CategoryTotal(val key: String, val tint: Long, val total: Double)
-
-data class Ledger(
-    val out: Double = 0.0,
-    val inn: Double = 0.0,
-    val entries: Int = 0,
-    val largest: Double = 0.0,
-    val categories: List<CategoryTotal> = emptyList(),
-    val parsed: List<Txn> = emptyList(),
-    val skipped: List<ParseResult.Skipped> = emptyList(),
-    val messages: Int = 0,
-) {
-    val net: Double get() = inn - out
-}
-
 class MoneyViewModel(app: Application) : AndroidViewModel(app) {
-
-    private val _scanning = MutableStateFlow(false)
-    val scanning: StateFlow<Boolean> = _scanning.asStateFlow()
-
-    val ledger: StateFlow<Ledger> = Prefs.messages(app)
-        .map { messages -> fold(SmsParser.parseAll(messages), messages.size) }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, Ledger())
 
     private val _holdings = MutableStateFlow(emptyList<Holding>())
     val holdings: StateFlow<List<Holding>> = _holdings.asStateFlow()
@@ -138,27 +116,6 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
         _importResult.value = null
     }
 
-    fun rescan() {
-        if (_scanning.value) return
-        viewModelScope.launch {
-            _scanning.value = true
-            delay(650)
-            // Re-reading the store re-runs the parser; the flow republishes.
-            Prefs.addMessages(getApplication(), emptyList())
-            _scanning.value = false
-        }
-    }
-
-    fun importText(raw: String) {
-        val lines = raw.split('\n').map { it.trim() }.filter { it.isNotBlank() }
-        if (lines.isEmpty()) return
-        viewModelScope.launch { Prefs.addMessages(getApplication(), lines) }
-    }
-
-    fun forget() {
-        viewModelScope.launch { Prefs.clearMessages(getApplication()) }
-    }
-
     fun portfolio(): Portfolio {
         val holdings = _holdings.value
         val value = holdings.sumOf { it.value }
@@ -170,25 +127,6 @@ class MoneyViewModel(app: Application) : AndroidViewModel(app) {
             day = value - open,
             profit = value - cost,
             profitPct = if (cost == 0.0) 0.0 else ((value - cost) / cost) * 100,
-        )
-    }
-
-    private fun fold(results: List<ParseResult>, messages: Int): Ledger {
-        val parsed = results.filterIsInstance<ParseResult.Parsed>().map { it.txn }
-        val skipped = results.filterIsInstance<ParseResult.Skipped>()
-        val outs = parsed.filter { it.direction == Direction.OUT }
-        val byCategory = outs.groupBy { it.category }
-            .map { (category, rows) -> CategoryTotal(category.key, category.tint, rows.sumOf { it.amount }) }
-            .sortedByDescending { it.total }
-        return Ledger(
-            out = outs.sumOf { it.amount },
-            inn = parsed.filter { it.direction == Direction.IN }.sumOf { it.amount },
-            entries = parsed.size,
-            largest = outs.maxOfOrNull { it.amount } ?: 0.0,
-            categories = byCategory,
-            parsed = parsed,
-            skipped = skipped,
-            messages = messages,
         )
     }
 
@@ -233,6 +171,9 @@ fun inr(amount: Double, decimals: Int = 0): String {
     return "₹" + inrFormat.format(amount)
 }
 
+/** Whole-paise amounts, formatted as rupees. */
+fun inrPaise(paise: Long): String = inr(paise / 100.0, decimals = if (paise % 100 == 0L) 0 else 2)
+
 /** Whole share counts stay whole; fund units keep their fraction. */
 fun units(quantity: Double): String =
     if (quantity % 1.0 == 0.0) quantity.toLong().toString()
@@ -240,3 +181,6 @@ fun units(quantity: Double): String =
 
 fun signed(amount: Double, decimals: Int = 0): String =
     (if (amount >= 0) "+" else "−") + inr(abs(amount), decimals)
+
+fun signedPaise(paise: Long): String =
+    (if (paise >= 0) "+" else "−") + inrPaise(abs(paise))

@@ -5,20 +5,20 @@ import android.content.Context
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
-import com.angel.launcher.data.Prefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * The Money pane's source of truth. READ_SMS is a restricted permission granted
- * essentially only to default SMS handlers — bank notifications carry the same
- * text and cost nothing at review time. SmsParser takes a String either way.
+ * Secondary Wealth pane source. SMS (SmsReceiver + SmsIngestor) is the source
+ * of truth since it is the only one that can backfill history; this exists
+ * for fintech apps that post a payment notification without ever sending a
+ * matching SMS. WealthRepository.ingest dedupes the two against each other.
  *
- * This reads the notification the messaging app posts for an incoming SMS, so
- * it works without this app being the SMS handler. It only ever sees messages
- * that arrive while notification access is on, which is why connecting also
+ * This reads the notification the app posts for a payment, so it works
+ * without this app being any kind of default handler. It only ever sees
+ * notifications that arrive while access is on, which is why connecting also
  * sweeps whatever is still showing in the shade.
  */
 class PaymentNotificationListener : NotificationListenerService() {
@@ -30,15 +30,17 @@ class PaymentNotificationListener : NotificationListenerService() {
         // Everything still in the shade, so granting access is not an empty
         // pane until the next payment lands.
         val standing = runCatching { activeNotifications }.getOrNull().orEmpty()
-            .mapNotNull { financialText(it) }
-        if (standing.isNotEmpty()) {
-            scope.launch { Prefs.addMessages(applicationContext, standing) }
+        val repo = WealthRepository.get(applicationContext)
+        standing.forEach { sbn ->
+            val text = financialText(sbn) ?: return@forEach
+            scope.launch { repo.ingestNotification(text, sbn.postTime) }
         }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val text = financialText(sbn) ?: return
-        scope.launch { Prefs.addMessages(applicationContext, listOf(text)) }
+        val repo = WealthRepository.get(applicationContext)
+        scope.launch { repo.ingestNotification(text, sbn.postTime) }
     }
 
     /** Title and body joined, or null when it quotes no amount. */

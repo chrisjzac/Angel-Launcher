@@ -3,6 +3,7 @@ package com.angel.launcher.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -11,15 +12,20 @@ import kotlinx.coroutines.flow.map
 
 private val Context.store: DataStore<Preferences> by preferencesDataStore(name = "angel")
 
-/** The only persistence the launcher has. No Room until something needs one. */
+/**
+ * Launcher-wide preferences. The Wealth pane's ledger lives in Room instead
+ * (see money/db/WealthDatabase.kt) — WEALTH_SMS_BACKFILLED is the one flag it
+ * still keeps here, since it is a launcher-level "have we ever done this"
+ * bit rather than ledger data.
+ */
 object Prefs {
     private val PINNED = stringPreferencesKey("pinned")
     private val SKY = stringPreferencesKey("sky")
     private val TEMP = stringPreferencesKey("temp")
     private val LAT = stringPreferencesKey("lat")
     private val LON = stringPreferencesKey("lon")
-    private val MESSAGES = stringPreferencesKey("messages")
     private val HOLDINGS = stringPreferencesKey("holdings")
+    private val WEALTH_SMS_BACKFILLED = booleanPreferencesKey("wealth_sms_backfilled")
 
     fun pinned(c: Context): Flow<List<String>> =
         c.store.data.map { p -> p[PINNED]?.split('\n')?.filter { it.isNotBlank() } ?: emptyList() }
@@ -57,34 +63,17 @@ object Prefs {
         }
     }
 
-    fun messages(c: Context): Flow<List<String>> =
-        c.store.data.map { p -> decode(p[MESSAGES]) }
-
-    suspend fun addMessages(c: Context, incoming: List<String>) {
-        c.store.edit { p ->
-            val existing = decode(p[MESSAGES])
-            val merged = (existing + incoming.filter { it.isNotBlank() })
-                .distinct()
-                .takeLast(400)
-            p[MESSAGES] = encode(merged)
-        }
-    }
-
-    suspend fun clearMessages(c: Context) {
-        c.store.edit { it.remove(MESSAGES) }
-    }
-
     fun holdings(c: Context): Flow<String?> = c.store.data.map { it[HOLDINGS] }
 
     suspend fun setHoldings(c: Context, json: String) {
         c.store.edit { it[HOLDINGS] = json }
     }
 
-    /** Messages contain newlines, so records are separated by NUL, not a line break. */
-    private const val SEP = "\u0000"
+    /** Whether the one-time READ_SMS inbox scan (SmsIngestor.backfill) has run. */
+    fun wealthSmsBackfilled(c: Context): Flow<Boolean> =
+        c.store.data.map { it[WEALTH_SMS_BACKFILLED] ?: false }
 
-    private fun encode(list: List<String>) = list.joinToString(SEP)
-
-    private fun decode(raw: String?): List<String> =
-        raw?.split(SEP)?.filter { it.isNotBlank() } ?: emptyList()
+    suspend fun setWealthSmsBackfilled(c: Context, done: Boolean) {
+        c.store.edit { it[WEALTH_SMS_BACKFILLED] = done }
+    }
 }

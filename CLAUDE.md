@@ -38,11 +38,19 @@ reads from the active `Sky`.
 
 ## Hard constraints — read before planning
 
-1. **`READ_SMS` will get the app rejected from Play.** It is a restricted
-   permission granted essentially only to default SMS handlers. Build the Money
-   pane against `NotificationListenerService` reading bank notifications, or a
-   manual import. `kotlin/SmsParser.kt` works on either source — it takes a
-   String. Do not design around `READ_SMS`.
+1. ~~`READ_SMS` will get the app rejected from Play.~~ **Superseded 2026-08-26:**
+   this app is sideload-only (see the debug-signed release config in
+   `app/build.gradle.kts`), so Play's restricted-permission review never
+   applies to it. The Wealth pane now reads `READ_SMS` for inbox backfill plus
+   `RECEIVE_SMS` for the live feed — history can't come from a notification
+   listener, which only ever sees what arrives while access is on. Still no
+   default-SMS-handler role: no `SMS_DELIVER`, no compose UI, no sending. The
+   notification listener stays wired up as a secondary source and dedupes
+   against SMS. Original reasoning kept below for context.
+   ~~It is a restricted permission granted essentially only to default SMS
+   handlers. Build the Money pane against `NotificationListenerService`
+   reading bank notifications, or a manual import. `kotlin/SmsParser.kt` works
+   on either source — it takes a String. Do not design around `READ_SMS`.~~
 2. **Biometrics use `BiometricPrompt` with `BIOMETRIC_STRONG`.** The prototype's
    hold-to-fill ring is a simulation of a sensor the web cannot reach; on device
    the system prompt replaces it. Keep the sensor's screen position anyway (see

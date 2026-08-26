@@ -35,6 +35,7 @@ import com.angel.launcher.launcher.AppsViewModel
 import com.angel.launcher.launcher.LauncherPane
 import com.angel.launcher.money.MoneyPane
 import com.angel.launcher.money.MoneyViewModel
+import com.angel.launcher.money.WealthViewModel
 import com.angel.launcher.ui.Palette
 import com.angel.launcher.ui.SkyWallpaper
 import com.angel.launcher.weather.WeatherViewModel
@@ -49,6 +50,7 @@ fun AngelApp(resetSignal: Int) {
     val weather: WeatherViewModel = viewModel()
     val home: HomeViewModel = viewModel()
     val money: MoneyViewModel = viewModel()
+    val wealth: WealthViewModel = viewModel()
 
     val sky by weather.sky.collectAsState()
     val skyMode by weather.mode.collectAsState()
@@ -180,6 +182,7 @@ fun AngelApp(resetSignal: Int) {
 
                     else -> MoneyPane(
                         model = money,
+                        wealth = wealth,
                         accent = sky.accent,
                         locked = !moneyUnlocked,
                         onUnlock = unlockMoney,
