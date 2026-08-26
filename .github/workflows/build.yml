@@ -22,6 +22,9 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --no-daemon
 
@@ -36,18 +39,18 @@ jobs:
           path: out/angel-launcher-debug.apk
           if-no-files-found: error
 
-      # One rolling release, re-uploaded in place, so the download link never
-      # changes: /releases/download/debug/angel-launcher-debug.apk
+      # One rolling release per branch, re-uploaded in place, so each
+      # download link never changes:
+      # /releases/download/debug/angel-launcher-debug.apk (claude/angel-launcher-build-9hynbh)
+      # /releases/download/wealth-debug/angel-launcher-debug.apk (feature/wealth-sms)
       - name: Publish the APK
-        if: github.ref_name == 'claude/angel-launcher-build-9hynbh'
+        if: github.ref_name == 'claude/angel-launcher-build-9hynbh' || github.ref_name == 'feature/wealth-sms'
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name == 'feature/wealth-sms' && 'wealth-debug' || 'debug' }}
         run: |
-          gh release view debug >/dev/null 2>&1 \
-            || gh release create debug --title "Debug build" --notes "bootstrapping"
-          gh release upload debug out/angel-launcher-debug.apk --clobber
-          gh release edit debug --notes \
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 \
+            || gh release create "$RELEASE_TAG" --title "Debug build" --notes "bootstrapping"
+          gh release upload "$RELEASE_TAG" out/angel-launcher-debug.apk --clobber
+          gh release edit "$RELEASE_TAG" --notes \
             "Build ${{ github.run_number }} — ${GITHUB_SHA:0:7} on \`${{ github.ref_name }}\`."
-
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace

@@ -20,7 +20,7 @@ object HoldingsCsv {
     )
     private val QUANTITY = listOf(
         "quantityavailable", "qty", "quantity", "shares", "units", "holding", "holdings",
-        "freebalance", "currentbalance", "closingbalance", "balance",
+        "freebalance", "currentbalance", "currentbal", "closingbalance", "balance",
     )
 
     /**
